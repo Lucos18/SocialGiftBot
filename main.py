@@ -1,7 +1,17 @@
+import asyncio
 import json
 import os
 
+PYPPETEER_CHROMIUM_REVISION = '1263111'
+
+os.environ['PYPPETEER_CHROMIUM_REVISION'] = PYPPETEER_CHROMIUM_REVISION
+
+from pyppeteer import launch
 from telethon import TelegramClient
+
+from ApiInstagrapiRequests.instagrapiUtils import cachedInstagramLoginPath, requestLoginAttemptInstagram
+from ApiTelethonRequests.telethonUtils import requestLoginAttemptTelegram
+from pyppeteerClient.pyppeteerUtils import goToPageAndClick
 
 telegramApiCredentialsPath = "telegramApiCredentials.json"
 instagramApiCredentialsPath = "instagramApiCredentials.json"
@@ -10,19 +20,20 @@ settingsPath = "settings.json"
 client: TelegramClient = None
 # TODO need Instagram Client
 
-accountInfo = {}
+accountInstagramInfo = {}
+accountTelegramInfo = {}
 settings = {}
 
 
 # Api Information region #
 def telegramApiCredentialsFileRead():
-    global accountInfo
+    global accountTelegramInfo
     try:
         assert os.path.isfile(telegramApiCredentialsPath)
         with open(telegramApiCredentialsPath, "r") as apiInfo:
             accountData = json.load(apiInfo)
             apiInfo.close()
-            accountInfo = accountData
+            accountTelegramInfo = accountData
             print("Account data for telegram loaded correctly!")
             return True
     except Exception as e:
@@ -31,7 +42,7 @@ def telegramApiCredentialsFileRead():
 
 
 def telegramApiCredentialsFileWrite():
-    global accountInfo
+    global accountTelegramInfo
     try:
         accountData = {
             'accountName': input('Enter account name: '),
@@ -44,7 +55,7 @@ def telegramApiCredentialsFileWrite():
         with open(telegramApiCredentialsPath, "w") as apiInfo:
             json.dump(accountData, apiInfo, indent=4)
             apiInfo.close()
-            accountInfo = accountData
+            accountTelegramInfo = accountData
             print("Account data for telegram saved correctly!")
             return True
     except Exception as e:
@@ -54,13 +65,13 @@ def telegramApiCredentialsFileWrite():
 
 
 def instagramApiCredentialsFileRead():
-    global accountInfo
+    global accountInstagramInfo
     try:
         assert os.path.isfile(telegramApiCredentialsPath)
         with open(instagramApiCredentialsPath, "r") as apiInfo:
             accountData = json.load(apiInfo)
             apiInfo.close()
-            accountInfo = accountData
+            accountInstagramInfo = accountData
             print("Account data for instagram loaded correctly!")
             return True
     except Exception as e:
@@ -69,21 +80,16 @@ def instagramApiCredentialsFileRead():
 
 
 def instagramApiCredentialsFileWrite():
-    global accountInfo
+    global accountInstagramInfo
     try:
         accountData = {
-            # TODO add correct informations
-            'accountName': input('Enter account name: '),
-            'apiId': input('Enter api_id: '),
-            'apiHash': input('Enter api_hash: '),
-            'accountNumber': input('Enter account number (used only for first login): '),
-            'accountPassword': input(
-                'Enter account password (used only for first login if two factor auth is enabled): '),
+            'accountName': input('Enter account username: '),
+            'accountPassword': input('Enter account password: '),
         }
         with open(instagramApiCredentialsPath, "w") as apiInfo:
             json.dump(accountData, apiInfo, indent=4)
             apiInfo.close()
-            accountInfo = accountData
+            accountInstagramInfo = accountData
             print("Account data for instagram saved correctly!")
             return True
     except Exception as e:
@@ -129,7 +135,23 @@ def settingsFileWrite():
 # Settings END region #
 
 async def main():
-    print("From here create and connect with instagram and telegram api")
+    clientInstagram = requestLoginAttemptInstagram(
+        accountInstagramInfo["accountName"],
+        accountInstagramInfo["accountPassword"]
+    )
+    clientTelegram = requestLoginAttemptTelegram(
+        accountTelegramInfo["accountName"],
+        accountTelegramInfo["apiId"],
+        accountTelegramInfo["apiHash"]
+    )
+    browserPyppeteer = await launch(
+        headless=False,
+        args=['--no-sandbox'],
+        autoClose=False
+    )
+    await goToPageAndClick(browserPyppeteer, "www.google.com")
+    print(clientInstagram)
+    print(clientTelegram)
 
 
 try:
@@ -152,8 +174,6 @@ if not settingsFileRead():
         print('Could not read or create new settings file, please check Github and follow the steps')
         exit(0)
 
-with TelegramClient(accountInfo["accountName"], accountInfo["apiId"], accountInfo["apiHash"]) as telegramAccount:
-    client = telegramAccount
-    client.loop.run_until_complete(main())
+asyncio.run(main())
 
 # TODO Add instagram client connection
