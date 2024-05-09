@@ -1,0 +1,6 @@
+instagrapi
+selenium
+telethon~=1.32.0
+progressbar2
+pyppeteer
+progressbar
