@@ -1,23 +1,34 @@
 import asyncio
 import json
 import os
+import random
+import sys
+import time
+from time import sleep
 
+from telethon import TelegramClient, events
+from telethon.tl.types import MessageEntityUrl
+
+import campaignEnum
+from ApiTelethonRequests.telethonUtils import requestLoginAttemptTelegram
+
+# PYPPETEER MUST BE ABOVE FROM IMPORT #
 PYPPETEER_CHROMIUM_REVISION = '1263111'
 
 os.environ['PYPPETEER_CHROMIUM_REVISION'] = PYPPETEER_CHROMIUM_REVISION
 
-from pyppeteer import launch
-from telethon import TelegramClient
-
-from ApiInstagrapiRequests.instagrapiUtils import cachedInstagramLoginPath, requestLoginAttemptInstagram
-from ApiTelethonRequests.telethonUtils import requestLoginAttemptTelegram
-from pyppeteerClient.pyppeteerUtils import goToPageAndClick
+from pyppeteerClient.pyppeteerUtils import goToPageAndClick, pyppeteerBrowser
 
 telegramApiCredentialsPath = "telegramApiCredentials.json"
 instagramApiCredentialsPath = "instagramApiCredentials.json"
 settingsPath = "settings.json"
 
-client: TelegramClient = None
+campaignEnumObject = campaignEnum.Campaign
+
+clientTelegram: TelegramClient = None
+
+sleeptime = random.uniform(2, 4)
+
 # TODO need Instagram Client
 
 accountInstagramInfo = {}
@@ -120,6 +131,7 @@ def settingsFileWrite():
     try:
         settings = {
             'pauseTimeBetweenEachChallenge': int(input('Enter pause time (seconds) before starting a new challenge: ')),
+            'retryCampaign': input('Enter amount of tries before skipping a campaign: '),
         }
         with open(settingsPath, "w") as settingsInfo:
             json.dump(settings, settingsInfo, indent=4)
@@ -134,24 +146,41 @@ def settingsFileWrite():
 
 # Settings END region #
 
-async def main():
-    clientInstagram = requestLoginAttemptInstagram(
-        accountInstagramInfo["accountName"],
-        accountInstagramInfo["accountPassword"]
-    )
-    clientTelegram = requestLoginAttemptTelegram(
-        accountTelegramInfo["accountName"],
-        accountTelegramInfo["apiId"],
-        accountTelegramInfo["apiHash"]
-    )
-    browserPyppeteer = await launch(
-        headless=False,
-        args=['--no-sandbox'],
-        autoClose=False
-    )
-    await goToPageAndClick(browserPyppeteer, "www.google.com")
-    print(clientInstagram)
-    print(clientTelegram)
+
+def waitTimeBeforeContinue(totalTimeToWait):
+    for i in reversed(range(1, totalTimeToWait)):
+        time.sleep(1 - time.time() % 1)
+        sys.stderr.write('\r%4d' % i)
+
+
+def scrapeLinkFromTelegramMessage(event):
+    msg = event.message
+    for _, inner_text in msg.get_entities_text(MessageEntityUrl):
+        url = inner_text
+        return url
+
+
+async def evaluateAndCompleteCampaign(message, filteredUrl):
+    campaignCompleted = False
+    retryCount = 0
+    if message.find(campaignEnumObject.IGTV.value['textMessageToEvaluate']) != -1:
+        while not campaignCompleted:
+            print("Campaign evaluated: IGTV")
+            print("Opening website and clicking button...")
+            didClickHappenSuccessfully = await goToPageAndClick(filteredUrl)
+            if didClickHappenSuccessfully:
+                print("Button click worked successfully!")
+                campaignCompleted = True
+                print("Waiting before confirming the campaign...")
+                waitTimeBeforeContinue(45)
+                print("Campaign completed")
+            else:
+                retryCount = retryCount + 1
+                sleep(sleeptime)
+                print("Error occurred with pyppeteer browser while clicking button, retry number: ", retryCount)
+    else:
+        print("No campaign have been found from message")
+    return campaignCompleted
 
 
 try:
@@ -174,6 +203,41 @@ if not settingsFileRead():
         print('Could not read or create new settings file, please check Github and follow the steps')
         exit(0)
 
-asyncio.run(main())
+#clientInstagram = requestLoginAttemptInstagram(
+    #accountInstagramInfo["accountName"],
+    #accountInstagramInfo["accountPassword"]
+#)
 
-# TODO Add instagram client connection
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+loop.run_until_complete(pyppeteerBrowser())
+
+with requestLoginAttemptTelegram(
+        accountTelegramInfo["accountName"],
+        accountTelegramInfo["apiId"],
+        accountTelegramInfo["apiHash"]
+) as clientTelegram:
+    client = clientTelegram
+    client.connect()
+
+
+    @client.on(events.NewMessage(chats='@socialgiftbot', incoming=True, outgoing=False))
+    async def handler(event):
+        eventRawText = event.raw_text
+
+        print("Incoming message from @socialgiftbot")
+        print("message received: ", event.message)
+        print("raw message received: ", event.raw_text)
+        filteredUrl = scrapeLinkFromTelegramMessage(event)
+        campaignResult = await evaluateAndCompleteCampaign(eventRawText, filteredUrl)
+        if campaignResult:
+            await event.message.click(1)
+            print("Confirm button clicked! Campaign is completed")
+        else:
+            await event.message.click(0)
+            print("Skip button clicked! Campaign is NOT completed")
+
+
+    client.start()
+
+    client.run_until_disconnected()
