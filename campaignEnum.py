@@ -3,12 +3,12 @@ from enum import Enum
 
 class Campaign(Enum):
     FOLLOW = {
-        "textMessageToEvaluate": "Segui il profilo"
-
+        "textMessageToEvaluate": "Segui",
+        "timeToWaitBeforeConfirmingCampaign": 20
     }  # TODO to be changed
     LIKE = {
-        "textMessageToEvaluate": "Metti LIKE al post"
-
+        "textMessageToEvaluate": "Metti LIKE al post",
+        "timeToWaitBeforeConfirmingCampaign": 12
     }  # TODO to be changed
     COMMENTS = {
         "textMessageToEvaluate": "COMMENTA il Post"
@@ -19,11 +19,19 @@ class Campaign(Enum):
 
     }  # TODO to be changed
     IGTV = {
-        "textMessageToEvaluate": "IGTV"
-        
+        "textMessageToEvaluate": "IGTV",
+        "timeToWaitBeforeConfirmingCampaign": 20
     }
     YOUTUBE = {
-        "textMessageToEvaluate": "Guarda il video"
-        
-    }   # TODO to be changed
+        "textMessageToEvaluate": "Guarda il video",
+        "timeToWaitBeforeConfirmingCampaign": 840  # 14 Minutes
+    }  # TODO to be changed
+    RULES = {
+        "textMessageToEvaluate": "REGOLAMENTO"
+
+    }
+    COMPLETED = {
+        "textMessageToEvaluate": "Riprova più tardi"
+
+    }
 
